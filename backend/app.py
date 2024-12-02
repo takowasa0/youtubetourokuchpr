@@ -1,7 +1,8 @@
-from flask import Flask, jsonify
+from flask import Flask, redirect, url_for, session, jsonify, request
 from flask_cors import CORS
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request  # Google API 用の Request クラス
 import os
 import pickle
 
@@ -16,13 +17,15 @@ def get_youtube_client():
         with open("token.pickle", "rb") as token:
             credentials = pickle.load(token)
 
+    # 資格情報が無効または期限切れの場合
     if not credentials or not credentials.valid:
         if credentials and credentials.expired and credentials.refresh_token:
-            credentials.refresh(Request())
+            credentials.refresh(Request())  # Google API 用の Request を使用
         else:
             flow = InstalledAppFlow.from_client_secrets_file("client_secrets.json", SCOPES)
             credentials = flow.run_local_server(port=0)
 
+        # 資格情報を保存
         with open("token.pickle", "wb") as token:
             pickle.dump(credentials, token)
 
@@ -48,6 +51,7 @@ def fetch_subscriptions():
     next_page_token = None
 
     while True:
+        # YouTube APIリクエスト
         request = youtube.subscriptions().list(
             part="snippet",
             mine=True,
@@ -57,7 +61,7 @@ def fetch_subscriptions():
         response = request.execute()
         for item in response["items"]:
             title = item["snippet"]["title"]
-            description = item["snippet"]["description"]
+            description = item["snippet"].get("description", "")
             genre = classify_genre(description)
             subscriptions.append({"title": title, "genre": genre})
         next_page_token = response.get("nextPageToken")
